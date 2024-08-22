@@ -1,4 +1,4 @@
-# Proyecto Kokaa: Desarrollo de VideoJuego
+# Proyecto Kokoa: Desarrollo de VideoJuego
 
 ## Descripción General
 
