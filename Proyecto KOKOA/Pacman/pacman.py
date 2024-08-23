@@ -18,6 +18,7 @@ NUM_FILAS, NUM_COLUMNAS = 31, 28
 # Direcciones de movimiento
 QUIETO, DERECHA, ARRIBA, IZQUIERDA, ABAJO = range(5)
 
+
 marcador = 0
 
 class Entidad:
@@ -119,6 +120,24 @@ def cargar_imagen(nombre_archivo):
         pygame.quit()
         sys.exit(error)
 
+def ventana_inicio():
+    while True:
+        ventana.blit(background, (0, 0))  # Mostrar la imagen de fondo
+        boton_rect = boton_play.get_rect(center=(300, 400))  # Posicionar el botón en el centro
+        ventana.blit(boton_play, boton_rect.topleft)  # Mostrar el botón
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Detectar clic izquierdo
+                if boton_rect.collidepoint(event.pos):  # Detectar clic en el botón
+                    return  # Iniciar el juego si se hace clic en el botón
+
+        pygame.display.update()  # Actualizar la pantalla
+        reloj.tick(60)  # Controlar la velocidad del bucle
+
+
 def animar_vitaminas():
     vitamina.tamano_actual = (vitamina.tamano_actual + 1) % 4
     num_imagen_vitamina = (vitamina.tamano_actual if vitamina.tamano_actual != 3 else 1)
@@ -154,6 +173,10 @@ def animar_fantasma(fantasma, posicion_anterior):
                   POS_TABLERO_Y + fila_siguiente * TAMANIO_CASILLA - 3 * ESCALA_SPRITE))
 
 def generar_direccion_aleatoria(fantasma):
+    # Si el fantasma está en dirección "QUIETO", seleccionar una dirección inicial al azar
+    if fantasma.direccion == QUIETO:
+        return random.choice([DERECHA, ARRIBA, IZQUIERDA, ABAJO])
+
     direcciones_posibles = []
     if puede_moverse(fantasma, DERECHA):   direcciones_posibles.append(DERECHA)
     if puede_moverse(fantasma, ARRIBA):    direcciones_posibles.append(ARRIBA)
@@ -169,7 +192,14 @@ def generar_direccion_aleatoria(fantasma):
 
         return random.choice(direcciones_posibles)
 
+
 def mover_fantasma(fantasma):
+    global fantasmas_habilitados
+
+    # No mover a los fantasmas si no están habilitados
+    if not fantasmas_habilitados:
+        return
+
     fila_anterior, columna_anterior = fila_siguiente, columna_siguiente = fantasma.posicion
 
     fantasma.tiempo_actual = time.time()
@@ -186,6 +216,12 @@ def mover_fantasma(fantasma):
 
     animar_fantasma(fantasma, (fila_anterior, columna_anterior))
 
+
+def mostrar_vidas():
+    ventana.fill(NEGRO, (0, 570, 600, 30))  # Limpiar la zona de las vidas
+    for i in range(pacman.vidas):
+        ventana.blit(imagen_ficha['pacman0'], (10 + i * 40, 570))
+
 def animar_pacman(posicion_anterior):
     fila, columna = posicion_anterior
     ventana.blit(vacio_pacman, (POS_TABLERO_X + columna * TAMANIO_CASILLA - 3 * ESCALA_SPRITE,
@@ -199,6 +235,7 @@ def animar_pacman(posicion_anterior):
     ventana.blit(imagen_ficha[imagen_pacman],
                  (POS_TABLERO_X + columna_siguiente * TAMANIO_CASILLA - 3 * ESCALA_SPRITE,
                   POS_TABLERO_Y + fila_siguiente * TAMANIO_CASILLA - 3 * ESCALA_SPRITE))
+
 
 def mover_pacman(direccion):
     global marcador
@@ -221,6 +258,12 @@ def mover_pacman(direccion):
             elif mapa[fila_siguiente][columna_siguiente] == 'o':  # se comió una vitamina
                 marcador += 50
                 mapa[fila_siguiente][columna_siguiente] = ' '
+                pacman.invencible = True  # Pac-Man se vuelve invencible
+                pacman.tiempo_invencible = time.time()  # Guardar el tiempo en que se vuelve invencible
+                # Cambiar la imagen de los fantasmas a 'Ap'
+                for fantasma in fantasmas:
+                    fantasma.imagenes = ['Ap']
+                    fantasma.comido = False  # Reiniciar el estado comido para permitir ser comidos nuevamente
                 for i in range(4):
                     if vitamina.obtener_posicion(i) == (fila_siguiente, columna_siguiente):
                         vitamina.comida[i] = True
@@ -235,6 +278,7 @@ def mover_pacman(direccion):
 
     ventana.blit(fuente['whimsy'].render('Score:', True, BLANCO, NEGRO), (10, 10))
     ventana.blit(fuente['whimsy'].render(f'{marcador}  ', True, AMARILLO, NEGRO), (100, 10))
+
 
 def puede_moverse(Entidad, direccion):
     fila, columna = Entidad.posicion
@@ -263,6 +307,10 @@ reloj = pygame.time.Clock()
 ventana = pygame.display.set_mode((600, 600))
 pygame.display.set_caption('P A C - M A N')
 
+# Cargar imágenes para la pantalla de inicio
+background = pygame.image.load(os.path.join('imagenes', 'background.jpg')).convert()
+boton_play = pygame.image.load(os.path.join('imagenes', 'boton_play.png')).convert_alpha()
+
 # Creación de canales de sonido
 Canal_Musica_Fondo = pygame.mixer.Channel(0)
 Canal_Efectos_Sonido = pygame.mixer.Channel(1)
@@ -272,17 +320,21 @@ fuente = {}
 fuente['whimsy'] = pygame.font.Font(os.path.join('fuentes', 'whimsytt.ttf'), 25)
 
 # Carga de sonidos
-archivos_sonidos = ['opening_song', 'eating_short', 'siren']
+archivos_sonidos = ['opening_song', 'eating_short', 'siren', 'pac_man_dies', 'eating_ghost', 'gameover', 'intermission']
 sonido = {archivo: cargar_sonido(archivo) for archivo in archivos_sonidos}
+
+
 
 # Carga de imágenes
 archivos_imagenes = [
     'laberinto', 'blinky', 'pinky', 'inky', 'clyde', 'muro_fan', 'pepa_peq', 'pepa_med',
-    'pepa_gra', 'vacio', 'pacman0', 'pacman1', 'pacman2'
+    'pepa_gra', 'vacio', 'pacman0', 'pacman1', 'pacman2', 'Ap', 'game_over', 'boton_volver_a_jugar', 'boton_inicio'
 ]
+
 imagen_ficha = {archivo: cargar_imagen(archivo) for archivo in archivos_imagenes}
 for archivo in imagen_ficha:
     imagen_ficha[archivo] = pygame.transform.scale2x(imagen_ficha[archivo])
+
 
 vacio_fantasma = imagen_ficha['blinky'].copy()
 vacio_fantasma.fill(NEGRO)
@@ -297,6 +349,15 @@ pygame.display.set_icon(icono)
 # Preparación del juego
 ventana.fill(NEGRO)
 ventana.blit(imagen_ficha['laberinto'], (POS_TABLERO_X, POS_TABLERO_Y))
+
+
+# Llamar a la ventana de inicio antes de comenzar el juego
+ventana_inicio()
+
+# Una vez que el jugador presiona "Start", iniciar el juego
+ventana.fill(NEGRO)
+ventana.blit(imagen_ficha['laberinto'], (POS_TABLERO_X, POS_TABLERO_Y))
+
 
 # Estado del juego
 salir_juego = False
@@ -328,45 +389,181 @@ def limpiar_fantasmas():
             ventana.blit(imagen_ficha['vacio'], (POS_TABLERO_X + columna * TAMANIO_CASILLA,
                                                  POS_TABLERO_Y + fila * TAMANIO_CASILLA))
 
+def reiniciar_juego():
+    global marcador, pacman, fantasmas, proxima_direccion, haciendo_intro, inicio_intro, fantasmas_habilitados
+
+    # Reiniciar variables del juego
+    marcador = 0
+    pacman = PacMan()
+    proxima_direccion = QUIETO
+
+    # Reiniciar fantasmas y sus posiciones originales
+    blinky.posicion = (14, 11)
+    pinky.posicion = (14, 13)
+    inky.posicion = (14, 15)
+    clyde.posicion = (13, 13)
+
+    # Asegurarse de que la dirección y el estado de los fantasmas sean los iniciales
+    for fantasma in fantasmas:
+        fantasma.direccion = QUIETO  # Fantasmas se mantienen quietos
+        fantasma.comido = False
+        fantasma.tiempo_inicio = time.time()
+
+    fantasmas = [blinky, pinky, inky, clyde]
+
+    # Reiniciar el mapa y las posiciones de los fantasmas
+    for i in range(NUM_FILAS):
+        mapa[i] = list(mapa[i])
+    mapa[12][13] = mapa[12][14] = 'M'
+
+    # Reiniciar estado de introducción
+    haciendo_intro = True
+    inicio_intro = time.time()
+    Canal_Musica_Fondo.play(sonido['opening_song'])
+
+    # Inicializar la bandera para controlar el movimiento de los fantasmas
+    fantasmas_habilitados = False
+
+    # Limpiar la pantalla y mostrar el mapa inicial
+    ventana.fill(NEGRO)
+    ventana.blit(imagen_ficha['laberinto'], (POS_TABLERO_X, POS_TABLERO_Y))
+    pygame.display.update()
+
+
+
+def mostrar_pantalla_game_over():
+    # Reproducir el sonido de game over
+    Canal_Musica_Fondo.stop()
+    Canal_Efectos_Sonido.play(sonido['gameover'])
+
+    # Cargar imágenes para el game over
+    fondo_game_over = cargar_imagen('game_over')
+    boton_volver_a_jugar = cargar_imagen('boton_volver_a_jugar')
+    boton_inicio = cargar_imagen('boton_inicio')
+
+    # Mostrar fondo de game over
+    ventana.blit(fondo_game_over, (0, 0))
+
+    # Posiciones de los botones
+    pos_boton_volver_a_jugar = (ventana.get_width() // 2 - boton_volver_a_jugar.get_width() // 2, 300)
+    pos_boton_inicio = (ventana.get_width() // 2 - boton_inicio.get_width() // 2, 400)
+
+    # Mostrar botones
+    ventana.blit(boton_volver_a_jugar, pos_boton_volver_a_jugar)
+    ventana.blit(boton_inicio, pos_boton_inicio)
+
+    pygame.display.update()
+
+    esperando = True
+    while esperando:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = event.pos
+
+                # Detectar clic en "Volver a jugar"
+                if pos_boton_volver_a_jugar[0] <= mouse_x <= pos_boton_volver_a_jugar[0] + boton_volver_a_jugar.get_width() and \
+                   pos_boton_volver_a_jugar[1] <= mouse_y <= pos_boton_volver_a_jugar[1] + boton_volver_a_jugar.get_height():
+                    reiniciar_juego()
+                    esperando = False
+
+                # Detectar clic en "Inicio"
+                if pos_boton_inicio[0] <= mouse_x <= pos_boton_inicio[0] + boton_inicio.get_width() and \
+                   pos_boton_inicio[1] <= mouse_y <= pos_boton_inicio[1] + boton_inicio.get_height():
+                    ventana_inicio()  # Volver a la pantalla de inicio
+                    esperando = False
 
 def verificar_colisiones():
     global marcador
 
+    if pacman.invencible and time.time() - pacman.tiempo_invencible > 5:
+        pacman.invencible = False
+        blinky.imagenes = ['blinky']
+        pinky.imagenes = ['pinky']
+        inky.imagenes = ['inky']
+        clyde.imagenes = ['clyde']
+
     for fantasma in fantasmas:
         if pacman.posicion == fantasma.posicion:
-            if pacman.invencible:
-                fantasma.set_comido(True)
+            if pacman.invencible and not fantasma.comido:
+                fantasma.comido = True
                 marcador += 200
-            else:
+                Canal_Efectos_Sonido.play(sonido['eating_ghost'])
+                fantasma.posicion = fantasma.posicion_original
+            elif not pacman.invencible:
                 pacman.vidas -= 1
-                # Detener el sonido de la sirena
                 Canal_Musica_Fondo.stop()
-
-                # Reproducir el sonido de muerte y esperar a que termine
                 sonido_muerte = cargar_sonido('pac_man_dies')
                 Canal_Efectos_Sonido.play(sonido_muerte)
                 pygame.time.wait(int(sonido_muerte.get_length() * 1000))
 
                 if pacman.vidas > 0:
-                    # Limpiar fantasmas anteriores
                     limpiar_fantasmas()
-
-                    # Reiniciar posición de Pac-Man y fantasmas
                     pacman.posicion = (23, 13)
                     pacman.direccion = QUIETO
                     for f in fantasmas:
                         f.posicion = f.posicion_original
                         f.direccion = ARRIBA
-
-                    # Pausa adicional antes de reanudar el juego
-                    pygame.time.wait(2000)  # Esperar 2 segundos
-
-                    # Reanudar la sirena
+                    pygame.time.wait(2000)
                     Canal_Musica_Fondo.play(sonido['siren'], -1)
                 else:
-                    # Finaliza el juego
-                    pygame.quit()
-                    sys.exit("Game Over")
+                    mostrar_pantalla_game_over()
+
+def verificar_victoria():
+    for fila in mapa:
+        if '.' in fila or 'o' in fila:
+            return False
+    return True
+
+
+def mostrar_pantalla_victoria():
+    # Reproducir la música de victoria
+    Canal_Musica_Fondo.stop()
+    Canal_Musica_Fondo.play(sonido['intermission'])  # Reproduce la música de victoria
+
+    # Cargar la imagen de fondo de victoria
+    fondo_victoria = cargar_imagen('congrats')
+    boton_volver_a_jugar = cargar_imagen('boton_volver_a_jugar')
+    boton_inicio = cargar_imagen('boton_inicio')
+
+    # Mostrar fondo de victoria
+    ventana.blit(fondo_victoria, (0, 0))
+
+    # Posiciones de los botones
+    pos_boton_volver_a_jugar = (ventana.get_width() // 2 - boton_volver_a_jugar.get_width() // 2, 300)
+    pos_boton_inicio = (ventana.get_width() // 2 - boton_inicio.get_width() // 2, 400)
+
+    # Mostrar botones
+    ventana.blit(boton_volver_a_jugar, pos_boton_volver_a_jugar)
+    ventana.blit(boton_inicio, pos_boton_inicio)
+
+    pygame.display.update()
+
+    esperando = True
+    while esperando:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = event.pos
+
+                # Detectar clic en "Volver a jugar"
+                if pos_boton_volver_a_jugar[0] <= mouse_x <= pos_boton_volver_a_jugar[0] + boton_volver_a_jugar.get_width() and \
+                   pos_boton_volver_a_jugar[1] <= mouse_y <= pos_boton_volver_a_jugar[1] + boton_volver_a_jugar.get_height():
+                    reiniciar_juego()  # Reinicia el juego
+                    esperando = False
+
+                # Detectar clic en "Inicio"
+                if pos_boton_inicio[0] <= mouse_x <= pos_boton_inicio[0] + boton_inicio.get_width() and \
+                   pos_boton_inicio[1] <= mouse_y <= pos_boton_inicio[1] + boton_inicio.get_height():
+                    ventana_inicio()  # Volver a la pantalla de inicio
+                    esperando = False
+
 
 # Bucle principal
 while pacman.vidas > 0 and not salir_juego:
@@ -380,18 +577,29 @@ while pacman.vidas > 0 and not salir_juego:
 
     if puede_moverse(pacman, proxima_direccion):
         mover_pacman(proxima_direccion)
+        # Habilitar el movimiento de los fantasmas cuando Pac-Man se mueva
+        fantasmas_habilitados = True
     else:
         mover_pacman(pacman.direccion)
 
-    # Limpiar y mover los fantasmas
-    limpiar_fantasmas()
-    for fantasma in fantasmas:
-        mover_fantasma(fantasma)
+    # Limpiar y mover los fantasmas solo si están habilitados y no estamos en la introducción
+    if fantasmas_habilitados and not haciendo_intro:
+        limpiar_fantasmas()
+        for fantasma in fantasmas:
+            mover_fantasma(fantasma)
 
     animar_vitaminas()
 
     # Verificar colisiones entre Pac-Man y los fantasmas
     verificar_colisiones()
+
+    # Verificar si Pac-Man ha comido todas las bolitas y vitaminas
+    if verificar_victoria():
+        mostrar_pantalla_victoria()
+        break
+
+    # Mostrar el contador de vidas
+    mostrar_vidas()
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -411,6 +619,3 @@ while pacman.vidas > 0 and not salir_juego:
 
     pygame.display.update()
     reloj.tick_busy_loop(16)
-
-pygame.quit()
-sys.exit()
