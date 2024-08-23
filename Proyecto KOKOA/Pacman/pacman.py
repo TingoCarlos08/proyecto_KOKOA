@@ -43,6 +43,8 @@ class Fantasma(Entidad):
         super().__init__(posicion=posicion, direccion=ARRIBA,
                          imagenes=[imagen], velocidad_mov=1.0 / 8)
         self.comido = False
+        self.posicion_original = posicion  # Guardar la posición original
+
 
 class Vitamina:
     def __init__(self):
@@ -307,6 +309,65 @@ inicio_intro = time.time()
 Canal_Musica_Fondo.play(sonido['opening_song'])
 mapa[12][13] = mapa[12][14] = '#'
 
+def limpiar_fantasmas():
+    for fantasma in fantasmas:
+        fila, columna = fantasma.posicion
+        ventana.blit(vacio_fantasma, (POS_TABLERO_X + columna * TAMANIO_CASILLA - 3 * ESCALA_SPRITE,
+                                      POS_TABLERO_Y + fila * TAMANIO_CASILLA - 3 * ESCALA_SPRITE))
+
+        if mapa[fila][columna] == 'M':
+            ventana.blit(imagen_ficha['muro_fan'], (POS_TABLERO_X + columna * TAMANIO_CASILLA,
+                                                    POS_TABLERO_Y + fila * TAMANIO_CASILLA))
+        elif mapa[fila][columna] == '.':
+            ventana.blit(imagen_ficha['pepa_peq'], (POS_TABLERO_X + columna * TAMANIO_CASILLA,
+                                                    POS_TABLERO_Y + fila * TAMANIO_CASILLA))
+        elif mapa[fila][columna] == 'o':
+            ventana.blit(imagen_ficha['pepa_gra'], (POS_TABLERO_X + columna * TAMANIO_CASILLA,
+                                                    POS_TABLERO_Y + fila * TAMANIO_CASILLA))
+        elif mapa[fila][columna] == ' ':
+            ventana.blit(imagen_ficha['vacio'], (POS_TABLERO_X + columna * TAMANIO_CASILLA,
+                                                 POS_TABLERO_Y + fila * TAMANIO_CASILLA))
+
+
+def verificar_colisiones():
+    global marcador
+
+    for fantasma in fantasmas:
+        if pacman.posicion == fantasma.posicion:
+            if pacman.invencible:
+                fantasma.set_comido(True)
+                marcador += 200
+            else:
+                pacman.vidas -= 1
+                # Detener el sonido de la sirena
+                Canal_Musica_Fondo.stop()
+
+                # Reproducir el sonido de muerte y esperar a que termine
+                sonido_muerte = cargar_sonido('pac_man_dies')
+                Canal_Efectos_Sonido.play(sonido_muerte)
+                pygame.time.wait(int(sonido_muerte.get_length() * 1000))
+
+                if pacman.vidas > 0:
+                    # Limpiar fantasmas anteriores
+                    limpiar_fantasmas()
+
+                    # Reiniciar posición de Pac-Man y fantasmas
+                    pacman.posicion = (23, 13)
+                    pacman.direccion = QUIETO
+                    for f in fantasmas:
+                        f.posicion = f.posicion_original
+                        f.direccion = ARRIBA
+
+                    # Pausa adicional antes de reanudar el juego
+                    pygame.time.wait(2000)  # Esperar 2 segundos
+
+                    # Reanudar la sirena
+                    Canal_Musica_Fondo.play(sonido['siren'], -1)
+                else:
+                    # Finaliza el juego
+                    pygame.quit()
+                    sys.exit("Game Over")
+
 # Bucle principal
 while pacman.vidas > 0 and not salir_juego:
     verificar_vitaminas_comidas()
@@ -322,10 +383,15 @@ while pacman.vidas > 0 and not salir_juego:
     else:
         mover_pacman(pacman.direccion)
 
+    # Limpiar y mover los fantasmas
+    limpiar_fantasmas()
     for fantasma in fantasmas:
         mover_fantasma(fantasma)
 
     animar_vitaminas()
+
+    # Verificar colisiones entre Pac-Man y los fantasmas
+    verificar_colisiones()
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
